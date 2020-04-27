@@ -1,0 +1,945 @@
+package Replica3.server;
+
+import Replica3.CommonOutput;
+import Replica3.implementation.DemsImplementation;
+
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.SocketException;
+import java.rmi.AlreadyBoundException;
+import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
+import java.rmi.registry.Registry;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.HashMap;
+
+
+
+public class Quebec {
+	
+	
+	public static HashMap<String, String> eventList = new HashMap<String, String>();
+	public static HashMap<String, Integer> a = new HashMap<String, Integer>();
+	public static HashMap<String, Integer> b = new HashMap<String, Integer>();
+	public static HashMap<String, Integer> c = new HashMap<String, Integer>();
+	//public static HashMap<String, ArrayList<String>> Muser1 = new HashMap<String, ArrayList<String>>();
+	public static HashMap<String, HashMap<String, ArrayList<String>>> Muser1 = new HashMap<String, HashMap<String, ArrayList<String>>>();
+
+	public static void main(String[] args) throws FileNotFoundException, RemoteException, AlreadyBoundException {
+		/*String location="G:\\workspace\\6231_project\\src\\logger\\clientlog\\Quebec.txt";;
+		PrintStream o=new PrintStream(new File(location));
+		System.setOut(o);*/
+		
+		SimpleDateFormat formatter = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
+		Date date = new Date();
+
+		// get reference to rootpoa &amp; activate
+
+		DemsImplementation stub = new DemsImplementation();
+		Registry registry = LocateRegistry.createRegistry(5556);
+
+		registry.bind("Function", stub);
+
+
+		eventList.put("CONFERENCES", "a");
+		eventList.put("TRADESHOWS", "b");
+		eventList.put("SEMINARS", "c");
+
+		System.out.println("Quebec Server ready and waiting ...");
+
+		DatagramSocket MSocket = null;
+		try {
+			MSocket = new DatagramSocket(7001);
+			// create socket at agreed port
+			byte[] buffer = new byte[1000];
+
+			System.out.println("Quebec UDP Server started");
+	                while (true) {
+	                DatagramPacket request = new DatagramPacket(buffer, buffer.length);
+	                MSocket.receive(request);
+	                Quebec m = new Quebec();
+	            
+	                String fullid = new String(request.getData());
+	                if(fullid.substring(0, 10).equalsIgnoreCase("checkCount")){
+	                    int count=m.getOccurances(fullid.substring(10, 18),fullid.substring(18, 28));
+	                    String mcount=String.valueOf(count);
+	                    byte[] msg = mcount.getBytes();
+	                    DatagramPacket reply = new DatagramPacket(msg, msg.length,
+	                            request.getAddress(), request.getPort());
+	                    MSocket.send(reply);
+	                }
+	                if(fullid.substring(0, 7).equalsIgnoreCase("Userdat")){
+						String customerID=(fullid.substring(7, 15));
+						String tempo = m.getUserData(customerID);
+						byte[] msg = tempo.getBytes();
+						DatagramPacket reply = new DatagramPacket(msg, msg.length,
+								request.getAddress(), request.getPort());
+						MSocket.send(reply);
+					}
+	                if(fullid.substring(0, 8).equalsIgnoreCase("isBooked")){
+                        String customerID=(fullid.substring(8, 16));
+                        String eventType=(fullid.substring(16, 26));
+                        
+                        String bookingexistence=m.isbooked(customerID,eventType);
+                        byte[] msg = bookingexistence.getBytes();
+                        DatagramPacket reply = new DatagramPacket(msg, msg.length,
+                                request.getAddress(), request.getPort());
+                        MSocket.send(reply);
+                    }
+                    if(fullid.substring(1, 13).equalsIgnoreCase("getExistence")){
+                        String oldEventID=(fullid.substring(13, 23));
+                        String oldEventType=(fullid.substring(0, 1));
+                        if(oldEventType.equalsIgnoreCase("c")){
+							oldEventType = "CONFERENCES";
+                        }else if(oldEventType.equalsIgnoreCase("t")){
+							oldEventType = "TRADESHOWS";
+                        }else if(oldEventType.equalsIgnoreCase("s")){
+							oldEventType = "SEMINARS";
+                        }
+                        String var = m.getHashMap(oldEventType);
+                        String ans=m.checkAvailabilityOfEvent(var, oldEventID);
+                        
+                        byte[] msg = ans.getBytes();
+                        DatagramPacket reply = new DatagramPacket(msg, msg.length,
+                                request.getAddress(), request.getPort());
+                        MSocket.send(reply);
+                    }
+	                String var = fullid.substring(0, 1);
+	                String var2 = fullid.substring(1, 8);
+	                
+	                if (var.equalsIgnoreCase("a")  ) {
+		                	String eventType="CONFERENCES";
+		                    if(var2.equalsIgnoreCase("display")){
+	                    String done = m.display(var);
+	                    byte[] msg = done.getBytes();
+	                    DatagramPacket reply = new DatagramPacket(msg, msg.length,
+	                            request.getAddress(), request.getPort());
+	                    MSocket.send(reply);
+	                    }
+	                    else if(var2.equalsIgnoreCase("booked ")){
+	                        String customerID = fullid.substring( 8,16);
+	                        String eventID = fullid.substring(16, 26);
+	                        if (m.checkAvailabilityOfEvent(var, eventID).equalsIgnoreCase(
+									"Available ")) {
+								String s = m.bookedEvent(var,eventID, customerID,eventType);
+								String r=new String();
+								if(s.contains("SecondBooking")){
+									 r= CommonOutput.bookEventOutput(false, null);
+								}else
+								 r=CommonOutput.bookEventOutput(true, null);
+								byte[] msg = r.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply);
+							} else if (m.checkAvailabilityOfEvent(var.substring(0, 1), eventID).equalsIgnoreCase(
+									"No Capacity ")) {//it checks both condition capacity and existence
+								String r = CommonOutput.bookEventOutput(false, CommonOutput.bookEvent_fail_no_capacity);
+								byte[] msg = r.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply); 
+								
+							}else {
+								String r = CommonOutput.bookEventOutput(false, CommonOutput.bookEvent_fail_no_such_event);
+										//"No such event is available";
+								byte[] msg = r.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply);
+								
+							}
+	                    }else if(var2.equalsIgnoreCase("cancel ")){
+							String customerID = fullid.substring( 8,16);
+							String eventID = fullid.substring(16, 26);
+							if (m.checkAvailabilityOfEvent1(var, eventID).equalsIgnoreCase(
+									"available ")) {
+								if (m.checkUserBooking(eventID, customerID,eventType)) {
+									String s = m.canceledEvent(var,eventID, customerID,eventType);
+									String c=CommonOutput.cancelEventOutput(true, null);
+									byte[] msg = c.getBytes();
+									DatagramPacket reply = new DatagramPacket(msg, msg.length,
+											request.getAddress(), request.getPort());
+									MSocket.send(reply);
+								} else{
+									String c =  CommonOutput.cancelEventOutput(false, CommonOutput.cancelEvent_fail_not_registered_in_event);
+									byte[] msg = c.getBytes();
+									DatagramPacket reply = new DatagramPacket(msg, msg.length,
+											request.getAddress(), request.getPort());
+									MSocket.send(reply);
+								}
+									
+							} else {
+								
+								String c = CommonOutput.cancelEventOutput(false, CommonOutput.cancelEvent_fail_no_such_event);
+								byte[] msg = c.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply);
+							}
+						}
+	                
+	                } else if (var.equalsIgnoreCase("b")  ) {
+	                	String eventType="TRADESHOWS";	
+	                    if(var2.equalsIgnoreCase("display")){
+	                        String done = m.display(var);
+	                        byte[] msg = done.getBytes();
+	                        DatagramPacket reply = new DatagramPacket(msg, msg.length,
+	                                request.getAddress(), request.getPort());
+	                        MSocket.send(reply);
+	                        }
+	                    else if(var2.equalsIgnoreCase("booked ")){
+							String customerID = fullid.substring( 8,16);
+							String eventID = fullid.substring(16, 26);
+							if (m.checkAvailabilityOfEvent(var, eventID).equalsIgnoreCase(
+									"Available ")) {
+								String s = m.bookedEvent(var,eventID, customerID,eventType);
+								String r=new String();
+								if(s.contains("SecondBooking")){
+									 r= CommonOutput.bookEventOutput(false, null);
+								}else
+								 r=CommonOutput.bookEventOutput(true, null);
+								byte[] msg = r.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply);
+							} else if (m.checkAvailabilityOfEvent(var.substring(0, 1), eventID).equalsIgnoreCase(
+									"No Capacity ")) {//it checks both condition capacity and existence
+								String r = CommonOutput.bookEventOutput(false, CommonOutput.bookEvent_fail_no_capacity);
+								byte[] msg = r.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply); 
+								
+							}else {
+								String r = CommonOutput.bookEventOutput(false, CommonOutput.bookEvent_fail_no_such_event);
+								byte[] msg = r.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply);
+								
+							}
+	                    }else if(var2.equalsIgnoreCase("cancel ")){
+							String customerID = fullid.substring( 8,16);
+							String eventID = fullid.substring(16, 26);
+							if (m.checkAvailabilityOfEvent1(var, eventID).equalsIgnoreCase(
+									"available ")) {
+								if (m.checkUserBooking(eventID, customerID,eventType)) {
+									String s = m.canceledEvent(var,eventID, customerID,eventType);
+									String c=CommonOutput.cancelEventOutput(true, null);
+									byte[] msg = c.getBytes();
+									DatagramPacket reply = new DatagramPacket(msg, msg.length,
+											request.getAddress(), request.getPort());
+									MSocket.send(reply);
+								} else{
+									String c =  CommonOutput.cancelEventOutput(false, CommonOutput.cancelEvent_fail_not_registered_in_event);
+									byte[] msg = c.getBytes();
+									DatagramPacket reply = new DatagramPacket(msg, msg.length,
+											request.getAddress(), request.getPort());
+									MSocket.send(reply);
+								}
+									
+							} else {
+								
+								String c = CommonOutput.cancelEventOutput(false, CommonOutput.cancelEvent_fail_no_such_event);
+								byte[] msg = c.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply);
+							}
+						}
+	                } else if (var.equalsIgnoreCase("c") ) {
+	                	String eventType="SEMINARS";
+	                    if(var2.equalsIgnoreCase("display")){
+	                        String done = m.display(var);
+	                        byte[] msg = done.getBytes();
+	                        DatagramPacket reply = new DatagramPacket(msg, msg.length,
+	                                request.getAddress(), request.getPort());
+	                        MSocket.send(reply);
+	                        }
+	                	else if(var2.equalsIgnoreCase("booked ")){
+							String customerID = fullid.substring( 8,16);
+							String eventID = fullid.substring(16, 26);
+							if (m.checkAvailabilityOfEvent(var, eventID).equalsIgnoreCase(
+									"Available ")) {
+								String s = m.bookedEvent(var,eventID, customerID,eventType);
+								String r=new String();
+								if(s.contains("SecondBooking")){
+									 r= CommonOutput.bookEventOutput(false, null);
+								}else
+								 r=CommonOutput.bookEventOutput(true, null);
+								byte[] msg = r.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply);
+							} else if (m.checkAvailabilityOfEvent(var.substring(0, 1), eventID).equalsIgnoreCase(
+									"No Capacity ")) {//it checks both condition capacity and existence
+								String r = CommonOutput.bookEventOutput(false, CommonOutput.bookEvent_fail_no_capacity);
+								byte[] msg = r.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply); 
+								
+							}else {
+								String r = CommonOutput.bookEventOutput(false, CommonOutput.bookEvent_fail_no_such_event);
+								byte[] msg = r.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply);
+								
+							}
+	                    }else if(var2.equalsIgnoreCase("cancel ")){
+							String customerID = fullid.substring( 8,16);
+							String eventID = fullid.substring(16, 26);
+							if (m.checkAvailabilityOfEvent1(var, eventID).equalsIgnoreCase(
+									"available ")) {
+								if (m.checkUserBooking(eventID, customerID,eventType)) {
+									String s = m.canceledEvent(var,eventID, customerID,eventType);
+									String c=CommonOutput.cancelEventOutput(true, null);
+									byte[] msg = c.getBytes();
+									DatagramPacket reply = new DatagramPacket(msg, msg.length,
+											request.getAddress(), request.getPort());
+									MSocket.send(reply);
+								} else{
+									String c =  CommonOutput.cancelEventOutput(false, CommonOutput.cancelEvent_fail_not_registered_in_event);
+									byte[] msg = c.getBytes();
+									DatagramPacket reply = new DatagramPacket(msg, msg.length,
+											request.getAddress(), request.getPort());
+									MSocket.send(reply);
+								}
+									
+							} else {
+								
+								String c = CommonOutput.cancelEventOutput(false, CommonOutput.cancelEvent_fail_no_such_event);
+								byte[] msg = c.getBytes();
+								DatagramPacket reply = new DatagramPacket(msg, msg.length,
+										request.getAddress(), request.getPort());
+								MSocket.send(reply);
+							}
+						}
+	                } 
+	                
+	                }
+	 
+	            } catch (SocketException e) {
+	                System.out.println("Socket: " + e.getMessage());
+	            } catch (IOException e) {
+	                System.out.println("IO: " + e.getMessage());
+	            } finally {
+	                if (MSocket != null)
+	                    MSocket.close();
+	            }
+			
+
+		
+
+	}
+
+	public synchronized String getHashMap(String eventType) {
+		// it sends a b or c depending on input
+		String value = eventList.get(eventType);
+
+		return value;
+	}
+
+	public synchronized String addHashMap(String var, String key, int Value) {
+		if (var == "a") {
+			// var=eventType sub_hashmap , key=eventID Value=booking Capacity
+			if (a.get(key) != null) {
+
+				int val = a.get(key);
+				a.replace(key, val + Value);
+				System.out.println ("Value updated for " + key + "to " + val);
+				 return CommonOutput.addEventOutput(true, CommonOutput.addEvent_success_capacity_updated);
+			} else {
+				a.put(key, Value);
+				System.out.println ("Added Successfully " + key + "to " + a.get(key));
+				 return CommonOutput.addEventOutput(true, CommonOutput.addEvent_success_added);
+			}
+		} else if (var == "b") {
+			if (b.get(key) != null) {
+
+				int val = b.get(key);
+				b.replace(key, val + Value);
+				System.out.println ("Value updated for " + key + "to " + val);
+				 return CommonOutput.addEventOutput(true, CommonOutput.addEvent_success_capacity_updated);
+			} else {
+				b.put(key, Value);
+				System.out.println ("Added Successfully " + key + "to " + a.get(key));
+				 return CommonOutput.addEventOutput(true, CommonOutput.addEvent_success_added);
+			}
+		} else if (var == "c") {
+			if (c.get(key) != null) {
+
+				int val = c.get(key);
+				c.replace(key, val + Value);
+				System.out.println ("Value updated for " + key + "to " + val);
+				 return CommonOutput.addEventOutput(true, CommonOutput.addEvent_success_capacity_updated);
+			} else {
+				c.put(key, Value);
+				System.out.println ("Added Successfully " + key + "to " + a.get(key));
+				 return CommonOutput.addEventOutput(true, CommonOutput.addEvent_success_added);
+			}
+		} else
+			return CommonOutput.addEventOutput(false, CommonOutput.addEvent_fail_cannot_decrease_capacity);
+
+	}
+
+	public synchronized String removeHashMap(String var, String key) {
+		//kye=event id
+		if (var == "a") {
+			if (a.get(key) != null) {
+				String key1 = key;
+				StringBuffer remover = new StringBuffer("Removed ");
+				if (Muser1.containsKey(key)) {
+					remover.append("Booking found for customer " + Muser1.get(key));
+					char[] c = key.toCharArray();
+					String str = Character.toString(c[4]);
+					String str2 = Character.toString(c[5]);
+					String dat = str + str2;
+
+					int i = Integer.parseInt(dat);
+					int counter = 0;
+					for (; i < 30; i++) {
+						char[] c1 = key1.toCharArray();
+						if (c1[3] == 'M') {
+							key1 = key.substring(0, 3) + "A" + key1.substring(4);
+							if (a.containsKey(key1) && a.get(key1) != 0) {
+								Muser1.put(key1, Muser1.get(key));
+								Muser1.remove(key);
+								int Value = a.get(key1);
+								a.replace(key1, Value - 1);
+												remover.append(". "+"Booking got changed to "+key1);
+												counter++;
+												break;
+												}
+											} c1 = key1.toCharArray();
+										if(c1[3]=='A'){
+											key1 = key.substring(0, 3)+"E" + key1.substring(4);
+											if (a.containsKey(key1) && a.get(key1) != 0 ){
+												Muser1.put(key1, Muser1.get(key));
+												Muser1.remove(key);
+												int Value = a.get(key1);
+												a.replace(key1, Value - 1);
+												remover.append(". " + "Booking got changed to " + key1);
+												counter++;
+												break;
+											}
+											c1 = key1.toCharArray();
+										}
+						if (i + 1 < 10)
+							key1 = key1.substring(0, 4) + "0" + (i + 1) + key1.substring(6);
+						else
+							key1 = key1.substring(0, 4) + (i + 1) + key1.substring(6);
+										c1 = key1.toCharArray();
+										if(c1[3]=='E'){
+													key1 = key.substring(0, 3)+"M" + key1.substring(4);
+													if (a.containsKey(key1) && a.get(key1) != 0 ){
+														Muser1.put(key1, Muser1.get(key));
+														Muser1.remove(key);
+														int Value=a.get(key1);
+														a.replace(key1, Value-1);
+														remover.append(". "+"Booking got changed to "+key1);
+														counter++;
+														break;
+													} }c1 = key1.toCharArray();
+					}
+					if(counter==0){
+						Muser1.remove(key);
+						remover.append(". "+"All Booking got cancelled for "+key);
+					}
+				}
+				a.remove(key);
+				System.out.println(key + " ." +remover.toString());
+				return CommonOutput.removeEventOutput(true, null);
+			} else {
+				 return CommonOutput.removeEventOutput(false, CommonOutput.removeEvent_fail_no_such_event);
+				//return("No record");
+			}
+		} else if (var == "b") {
+			if (b.get(key) != null) {
+				String key1 = key;
+				StringBuffer remover = new StringBuffer("Removed ");
+				if (Muser1.containsKey(key)) {
+					remover.append("Booking found for customer " + Muser1.get(key));
+					char[] c = key.toCharArray();
+					String str = Character.toString(c[4]);
+					String str2 = Character.toString(c[5]);
+					String dat = str + str2;
+
+					int i = Integer.parseInt(dat);
+					int counter = 0;
+					for (; i < 30; i++) {
+						char[] c1 = key1.toCharArray();
+						if (c1[3] == 'M') {
+							key1 = key.substring(0, 3) + "A" + key1.substring(4);
+							if (b.containsKey(key1) && b.get(key1) != 0) {
+								Muser1.put(key1, Muser1.get(key));
+								Muser1.remove(key);
+								int Value = b.get(key1);
+								b.replace(key1, Value - 1);
+												remover.append(". "+"Booking got changed to "+key1);
+												counter++;
+												break;
+												}
+											} c1 = key1.toCharArray();
+										if(c1[3]=='A'){
+											key1 = key.substring(0, 3)+"E" + key1.substring(4);
+											if (b.containsKey(key1) && b.get(key1) != 0 ){
+												Muser1.put(key1, Muser1.get(key));
+												Muser1.remove(key);
+												int Value = b.get(key1);
+												b.replace(key1, Value - 1);
+												remover.append(". " + "Booking got changed to " + key1);
+												counter++;
+												break;
+											}
+											c1 = key1.toCharArray();
+										}
+						if (i + 1 < 10)
+							key1 = key1.substring(0, 4) + "0" + (i + 1) + key1.substring(6);
+						else
+							key1 = key1.substring(0, 4) + (i + 1) + key1.substring(6);
+										c1 = key1.toCharArray();
+										if(c1[3]=='E'){
+													key1 = key.substring(0, 3)+"M" + key1.substring(4);
+													if (b.containsKey(key1) && b.get(key1) != 0 ){
+														Muser1.put(key1, Muser1.get(key));
+														Muser1.remove(key);
+														int Value=b.get(key1);
+														b.replace(key1, Value-1);
+														remover.append(". "+"Booking got changed to "+key1);
+														counter++;
+														break;
+													} }c1 = key1.toCharArray();
+					}
+					if(counter==0){
+						Muser1.remove(key);
+						remover.append(". "+"All Booking got cancelled for "+key);
+					}
+				}
+				b.remove(key);
+				System.out.println(key + " ." +remover.toString());
+				return CommonOutput.removeEventOutput(true, null);
+			} else {
+				 return CommonOutput.removeEventOutput(false, CommonOutput.removeEvent_fail_no_such_event);
+				//return("No record");
+			}
+		} else if (var == "c") {
+			if (c.get(key) != null) {
+				String key1 = key;
+				StringBuffer remover = new StringBuffer("Removed ");
+				if (Muser1.containsKey(key)) {
+					remover.append("Booking found for customer " + Muser1.get(key));
+					char[] ch = key.toCharArray();
+					String str = Character.toString(ch[4]);
+					String str2 = Character.toString(ch[5]);
+					String dat = str + str2;
+
+					int i = Integer.parseInt(dat);
+					int counter = 0;
+					for (; i < 30; i++) {
+						char[] c1 = key1.toCharArray();
+						if (c1[3] == 'M') {
+							key1 = key.substring(0, 3) + "A" + key1.substring(4);
+							if (c.containsKey(key1) && c.get(key1) != 0) {
+								Muser1.put(key1, Muser1.get(key));
+								Muser1.remove(key);
+								int Value = c.get(key1);
+								c.replace(key1, Value - 1);
+												remover.append(". "+"Booking got changed to "+key1);
+												counter++;
+												break;
+												}
+											} c1 = key1.toCharArray();
+										if(c1[3]=='A'){
+											key1 = key.substring(0, 3)+"E" + key1.substring(4);
+											if (c.containsKey(key1) && c.get(key1) != 0 ){
+												Muser1.put(key1, Muser1.get(key));
+												Muser1.remove(key);
+												int Value = c.get(key1);
+												c.replace(key1, Value - 1);
+												remover.append(". " + "Booking got changed to " + key1);
+												counter++;
+												break;
+											}
+											c1 = key1.toCharArray();
+										}
+						if (i + 1 < 10)
+							key1 = key1.substring(0, 4) + "0" + (i + 1) + key1.substring(6);
+						else
+							key1 = key1.substring(0, 4) + (i + 1) + key1.substring(6);
+										c1 = key1.toCharArray();
+										if(c1[3]=='E'){
+													key1 = key.substring(0, 3)+"M" + key1.substring(4);
+													if (c.containsKey(key1) && c.get(key1) != 0 ){
+														Muser1.put(key1, Muser1.get(key));
+														Muser1.remove(key);
+														int Value=c.get(key1);
+														c.replace(key1, Value-1);
+														remover.append(". "+"Booking got changed to "+key1);
+														counter++;
+														break;
+													} }c1 = key1.toCharArray();
+					}
+					if(counter==0){
+						Muser1.remove(key);
+						remover.append(". "+"All Booking got cancelled for "+key);
+					}
+				}
+				c.remove(key);
+				System.out.println(key + " ." +remover.toString());
+				return CommonOutput.removeEventOutput(true, null);
+			} else {
+				 return CommonOutput.removeEventOutput(false, CommonOutput.removeEvent_fail_no_such_event);
+				//return("No record");
+			}
+		}
+		return CommonOutput.removeEventOutput(false, null);
+		
+	}
+
+	public synchronized String display(String var) {
+		HashMap<String, Integer> temp = new HashMap<String, Integer>();
+		String value = var;
+		System.out.println("List for event type ");
+		String ss = " ";
+		if (value.equalsIgnoreCase("a")) {
+			a.entrySet().forEach(entry -> {
+				System.out.println(entry.getKey());
+				System.out.println(entry.getValue());
+				// ss=ss+entry.getKey();
+					temp.put(entry.getKey(), entry.getValue());
+				});
+			
+			
+		} else if (value.equalsIgnoreCase("b")) {
+			b.entrySet().forEach(entry -> {
+				temp.put(entry.getKey(), entry.getValue());
+			});
+
+		} else if (value.equalsIgnoreCase("c")) {
+			c.entrySet().forEach(entry -> {
+				temp.put(entry.getKey(), entry.getValue());
+			});
+
+		}
+
+		StringBuffer str = new StringBuffer();
+		temp.entrySet().forEach(entry -> {
+
+			str.append(entry.getKey() + " " + entry.getValue() + ",");
+		});
+		return str.toString();
+
+	}
+
+	public synchronized String checkAvailabilityOfEvent(String var, String key) {
+		// key is event id
+
+		if (var.equalsIgnoreCase("a")) {
+			if (a.containsKey(key) ) {
+				if(a.get(key) != 0)
+					return ("Available ");
+				else
+					return ("No Capacity ");
+			} else {
+
+				return ("Not");
+			}
+		} else if (var.equalsIgnoreCase("b")) {
+			if (b.containsKey(key) ) {
+				if(b.get(key) != 0)
+					return ("Available ");
+				else
+					return ("No Capacity ");
+			} else {
+
+				return ("Not");
+			}
+		} else if (var.equalsIgnoreCase("c")) {
+			if (c.containsKey(key)) {
+				if(c.get(key) != 0)
+					return ("Available ");
+				else
+					return ("No Capacity ");
+			} else {
+
+				return ("Not");
+			}
+		}
+		return null;
+	}
+	public synchronized String checkAvailabilityOfEvent1(String var, String key) {
+		// key is event id
+
+		if (var.equalsIgnoreCase("a")) {
+			if (a.containsKey(key)) {
+				return ("Available ");
+			} else {
+
+				return ("Not");
+			}
+		} else if (var.equalsIgnoreCase("b")) {
+			if (b.containsKey(key)) {
+				return ("Available ");
+			} else {
+
+				return ("Not");
+			}
+		} else if (var.equalsIgnoreCase("c")) {
+			if (c.containsKey(key)) {
+				return ("Available ");
+			} else {
+
+				return ("Not");
+			}
+		}
+		return null;
+	}
+	public synchronized String bookedEvent(String var,String eventID, String customerID,String eventType) {
+		// TODO Auto-generated method stub
+		char[] ch = customerID.toCharArray();
+		char[] ch1 = {ch[0], ch[1], ch[2]};
+		String server = new String(ch1);
+		ArrayList<String> users = new ArrayList<String>();
+		if (Muser1.containsKey(eventID)) {
+			Quebec m = new Quebec();
+			if(m.secondBook(eventID,customerID,eventType)){
+				return "SecondBooking";
+			}
+			HashMap<String, ArrayList<String>> h=new HashMap<String, ArrayList<String>>();
+			h= Muser1.get(eventID);
+			
+			if(h.containsKey(eventType)){
+			users = h.get(eventType);
+			users.add(customerID);
+			h.replace(eventType, users);
+			Muser1.put(eventID, h);
+			}
+			else{
+				//HashMap<String, ArrayList<String>> h1=new HashMap<String, ArrayList<String>>();
+				users.add(customerID);
+				h.put(eventType, users);
+				Muser1.put(eventID, h);
+				
+			}
+		} else {
+			HashMap<String, ArrayList<String>> h=new HashMap<String, ArrayList<String>>();
+			users.add(customerID);
+			h.put(eventType, users);
+			Muser1.put(eventID, h);
+		}
+		
+		if(var.equalsIgnoreCase("a")){
+			int Value=a.get(eventID);
+			a.replace(eventID, Value-1);
+		} else if(var.equalsIgnoreCase("b")){
+			int Value=b.get(eventID);
+			b.replace(eventID, Value-1);
+		} else if(var.equalsIgnoreCase("c")){
+			int Value=c.get(eventID);
+			c.replace(eventID, Value-1);
+		}
+		
+		String s = "booked event " + eventID + " for " + customerID;
+		System.out.println(s);
+		return s;
+	}
+
+	public synchronized boolean secondBook(String eventID,String customerID,String eventType){
+		HashMap<String, ArrayList<String>> h=Muser1.get(eventID); 
+		ArrayList<String> users1 = h.get(eventType);
+		if (/*Muser.containsKey(eventID) &&*/users1 != null && users1.contains(customerID)){
+			return true;
+		}
+		return false;
+		
+	}
+	public synchronized String canceledEvent(String var,String eventID, String customerID,String eventType) {
+		// TODO Auto-generated method stub
+
+
+		char[] ch = customerID.toCharArray();
+		char[] ch1 = {ch[0], ch[1], ch[2]};
+		String server = new String(ch1);
+
+		ArrayList<String> users = new ArrayList<String>();
+		HashMap<String, ArrayList<String>> h=new HashMap<String, ArrayList<String>>();
+		
+		if (Muser1.containsKey(eventID)) {
+			h = Muser1.get(eventID);
+			/*if(h.size()==1){*/
+			users=h.get(eventType);
+			
+				users.remove(customerID);
+				h.replace(eventType, users);
+				Muser1.put(eventID, h);
+			
+			
+			if(users.size() == 0){
+			h.remove(eventType);
+			if(h.size()==0)
+				Muser1.remove(eventID);
+			}
+			
+			if(var.equalsIgnoreCase("a")){
+				int Value=a.get(eventID);
+				a.replace(eventID, Value+1);
+			} else if(var.equalsIgnoreCase("b")){
+				int Value=b.get(eventID);
+				b.replace(eventID, Value+1);
+			} else if(var.equalsIgnoreCase("c")){
+				int Value=c.get(eventID);
+				c.replace(eventID, Value+1);
+			}
+		}
+		
+		
+		String s = "cancelled event " + eventID + " for " + customerID;
+		return s;
+	}
+
+	public synchronized boolean checkUserBooking(String eventID,
+			String customerID,String eventType) {
+		// TODO Auto-generated method stub
+		//Muser.put(eventID, customerID);
+		return Muser1.containsKey(eventID)
+				&& (Muser1.get(eventID)).get(eventType).contains(customerID);
+	}
+
+	public synchronized String getUserData(String customerID) {
+		HashMap<String, String> temp11 = new HashMap<String, String>();
+
+		StringBuffer str = new StringBuffer(" ");
+		Muser1.entrySet().forEach(entry -> {
+			
+			
+			entry.getValue().entrySet().forEach(entry1 -> {
+				System.out.println(entry1.getKey());
+				if (entry1.getValue().contains(customerID))
+					str.append(entry1.getKey()+" "+entry.getKey()+",");
+			});
+		});
+		return str.toString();
+
+	}
+	
+	public synchronized int getOccurances(String customerID,String EventId) {
+		// TODO Auto-generated method stub
+	/*	int[] count = {0};
+		Muser.entrySet().forEach(entry -> {
+			
+			if (entry.getValue().contains(customerID)){
+				count[0]++;
+			}
+				
+		});
+		return count[0];*/
+		int[] count = {0};
+		int date=Integer.parseInt(EventId.substring(4,6));
+		ArrayList<String> ar=new ArrayList<String>();
+		
+		int w=date/7;
+		
+		for(int i=7*w;i<7*w+7;i++){
+			int c=i+1;
+			String newEvent = "";
+			if (c >= 1 && c < 10) {
+				newEvent = "QUE" + EventId.substring(3, 4) + "0" + c + EventId.substring(6, 10);
+			} else if (c >= 10) {
+				newEvent = "QUE" + EventId.substring(3, 4) + c + EventId.substring(6, 10);
+			}
+			 if(EventId.substring(3,4).equalsIgnoreCase("M")){
+            	 ar.add(newEvent);
+            	 ar.add(newEvent.substring(0, 3)+"A"+newEvent.substring(4));
+            	 ar.add(newEvent.substring(0, 3)+"E"+newEvent.substring(4));
+            }else if(EventId.substring(3,4).equalsIgnoreCase("A")){
+            	 ar.add(newEvent);
+            	 ar.add(newEvent.substring(0, 3)+"M"+newEvent.substring(4));
+            	 ar.add(newEvent.substring(0, 3)+"E"+newEvent.substring(4));
+            }else if(EventId.substring(3,4).equalsIgnoreCase("E")){
+            	 ar.add(newEvent);
+            	 ar.add(newEvent.substring(0, 3)+"A"+newEvent.substring(4));
+            	 ar.add(newEvent.substring(0, 3)+"M"+newEvent.substring(4));
+            }
+		}
+		
+		
+		Muser1.entrySet().forEach(entry -> {
+			
+			if (ar.contains(entry.getKey())){
+				
+				entry.getValue().entrySet().forEach(entry1 -> {
+					//System.out.println(entry1.getKey());
+					if(entry1.getValue().contains(customerID))
+						count[0]++;
+				});
+			}
+				
+		});
+		return count[0];
+	}
+	 public synchronized String isbooked(String customerID,String EventType) {
+		 StringBuffer str = new StringBuffer();
+		 int[] count = {0};
+         Muser1.entrySet().forEach(entry -> {
+        	 entry.getValue().entrySet().forEach(entry1 -> {
+ 				//System.out.println(entry1.getKey());
+ 				if (entry1.getKey().equalsIgnoreCase(EventType) && entry1.getValue().contains(customerID))
+ 					count[0]++;
+ 			});
+                 
+             
+         });
+         
+         if(count[0]==0)
+             str.append("false");
+         else
+             str.append("true");
+         return str.toString();
+     }
+	
+	public synchronized String UDPConnect(int serverPort, String combinedId) {
+		DatagramSocket aSocket = null;
+		String str = "";
+		try {
+			System.out.println("Quebec client started");
+			aSocket = new DatagramSocket();
+			byte[] message = combinedId.getBytes();
+
+			InetAddress aHost = InetAddress.getByName("localhost");
+
+			// int serverPort = this.;
+			// DatagramPacket request =new DatagramPacket(m, args[0].length(),
+			// aHost, serverPort);
+			DatagramPacket request = new DatagramPacket(message,
+					combinedId.length(), aHost, serverPort);
+
+			aSocket.send(request);
+			System.out.println("Request message sent via UDP");
+
+			byte[] buffer = new byte[1000];
+			DatagramPacket reply = new DatagramPacket(buffer, buffer.length);
+
+			aSocket.receive(reply);
+			String str1=new String(reply.getData());
+            str=str1.trim();
+            
+            return str;
+		} catch (SocketException e) {
+			System.out.println("Socket: " + e.getMessage());
+		} catch (IOException e) {
+			System.out.println("IO: " + e.getMessage());
+		} finally {
+			if (aSocket != null)
+				aSocket.close();
+		}
+		return str;
+	}
+
+}
